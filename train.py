@@ -8,6 +8,9 @@ import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torchvision.transforms as transforms
 import yaml
+import matplotlib.pyplot as plt
+import random
+import numpy as np
 from easydict import EasyDict
 from torch.utils.tensorboard import SummaryWriter
 
@@ -37,7 +40,8 @@ logger = Logger(
 ).get_log()
 config = None
 
-
+ 
+        
 def train(train_loader, net, criterion, optimizer, epoch, device):
     global writer
 
@@ -52,6 +56,7 @@ def train(train_loader, net, criterion, optimizer, epoch, device):
     for batch_index, (inputs, targets) in enumerate(train_loader):
         # move tensor to GPU
         inputs, targets = inputs.to(device), targets.to(device)
+        
         if config.mixup:
             inputs, targets_a, targets_b, lam = mixup_data(
                 inputs, targets, config.mixup_alpha, device
@@ -113,7 +118,53 @@ def train(train_loader, net, criterion, optimizer, epoch, device):
 
     return train_loss, train_acc
 
+#MODIFIED CODE
+def fgsmAttack(image, epsilon, data_grad): #FGSM generator
+    sign_data_grad = data_grad.sign() #Get the sign of the data gradient
+    attackIMG = image + epsilon * sign_data_grad #Pertubate
+    attackIMG = torch.clamp(attackIMG, 0, 1) 
+    return attackIMG
 
+def fgsmTester(test_loader, net, criterion, optimizer, epoch, device, epsilon): #FGSM Tester
+    global best_prec, writer
+
+    net.eval()
+
+    test_loss = 0
+    correct = 0
+    total = 0
+    totalConfidence = 0
+    logger.info(" === FGSM ===")
+
+    for batch_index, (inputs, targets) in enumerate(test_loader):
+        inputs, targets = inputs.to(device), targets.to(device)
+        
+        
+        inputs.requires_grad = True
+        outputs = net(inputs)
+        loss = criterion(outputs, targets)
+        net.zero_grad()  # Zero the existing gradients
+        loss.backward()  # Backward pass
+        # Collect the gradient of the input with respect to the loss
+        data_grad = inputs.grad.data
+        # Call FGSM Attack
+        attackImages = fgsmAttack(inputs, epsilon, data_grad)
+
+        # Forward pass with perturbed inputs
+        outputs = net(attackImages)
+        loss = criterion(outputs, targets)
+        test_loss += loss.item()
+        _, predicted = outputs.max(1)
+        total += targets.size(0)
+        correct += predicted.eq(targets).sum().item()
+        probs = torch.nn.functional.softmax(outputs, dim=1)
+        # totalConfidence += torch.max(probs)
+        totalConfidence += torch.max(probs, dim=1)[0].sum().item()
+    logger.info(
+        "   == FGSM test loss: {:.3f} | FGSM test acc: {:6.3f}% | FGSM test Average confidence: {:.3f}%".format(
+            test_loss / (batch_index + 1), 100.0 * correct / total, 100.0 * (totalConfidence / total)
+        )
+    )
 def test(test_loader, net, criterion, optimizer, epoch, device):
     global best_prec, writer
 
@@ -122,12 +173,13 @@ def test(test_loader, net, criterion, optimizer, epoch, device):
     test_loss = 0
     correct = 0
     total = 0
-
+    totalConfidence = 0
     logger.info(" === Validate ===")
 
     with torch.no_grad():
         for batch_index, (inputs, targets) in enumerate(test_loader):
             inputs, targets = inputs.to(device), targets.to(device)
+            
             outputs = net(inputs)
             loss = criterion(outputs, targets)
 
@@ -135,10 +187,13 @@ def test(test_loader, net, criterion, optimizer, epoch, device):
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
+            probs = torch.nn.functional.softmax(outputs, dim=1)
+            # totalConfidence += torch.max(probs)
+            totalConfidence += torch.max(probs, dim=1)[0].sum().item()
 
     logger.info(
-        "   == test loss: {:.3f} | test acc: {:6.3f}%".format(
-            test_loss / (batch_index + 1), 100.0 * correct / total
+        "   == test loss: {:.3f} | test acc: {:6.3f}% | test avg confidence: {:.3f}%".format(
+            test_loss / (batch_index + 1), 100.0 * correct / total, 100.0 * totalConfidence / total
         )
     )
     test_loss = test_loss / (batch_index + 1)
@@ -161,11 +216,12 @@ def test(test_loader, net, criterion, optimizer, epoch, device):
 
 def main():
     global args, config, last_epoch, best_prec, writer
+    epsilons = [0.01, 0.1, 0.25, 0.5, 0.75, 1,10]#For FGSM Attack
     writer = SummaryWriter(log_dir=args.work_path + "/event")
 
     # read config from yaml file
     with open(args.work_path + "/config.yaml") as f:
-        config = yaml.load(f)
+        config = yaml.safe_load(f)
     # convert to dict
     config = EasyDict(config)
     logger.info(config)
@@ -222,13 +278,14 @@ def main():
             or epoch == config.epochs - 1
         ):
             test(test_loader, net, criterion, optimizer, epoch, device)
+    for epsilon in epsilons:
+        print("Epsilon: {}".format(epsilon))
+        fgsmTester(test_loader, net, criterion, optimizer, epoch, device, epsilon)
     writer.close()
     logger.info(
-        "======== Training Finished.   best_test_acc: {:.3f}% ========".format(
+        "======== Training Finished.   best_test_acc: {:.3f}% ========  ".format(
             best_prec
         )
     )
-
-
 if __name__ == "__main__":
     main()

@@ -133,7 +133,7 @@ def get_data_loader(transform_train, transform_test, config):
         testset = torchvision.datasets.CIFAR100(
             root=config.data_path, train=False, download=True, transform=transform_test
         )
-
+    trainset.targets = poisonLabels(trainset.targets, 0.0)
     train_loader = torch.utils.data.DataLoader(
         trainset, batch_size=config.batch_size, shuffle=True, num_workers=config.workers
     )
@@ -143,6 +143,18 @@ def get_data_loader(transform_train, transform_test, config):
     )
     return train_loader, test_loader
 
+# MODIFIED CODE
+def poisonLabels(labels, percentPoisoned):
+    numLabels = len(labels)
+    numPoisoned = int(len(labels) * percentPoisoned)
+    
+    poisonIndexes= np.random.choice(numLabels, numPoisoned, replace=False)
+    poisonedLabels = np.random.randint(0,10, size=numPoisoned)
+    print("Number of poisoned labels: ", numPoisoned)
+    for i in range(numPoisoned):
+        labels[poisonIndexes[i]] = poisonedLabels[i]
+    print("Poisoned labels: ", poisonedLabels)
+    return labels
 
 def mixup_data(x, y, alpha, device):
     """Returns mixed inputs, pairs of targets, and lambda"""
