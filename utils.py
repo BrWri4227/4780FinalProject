@@ -133,7 +133,7 @@ def get_data_loader(transform_train, transform_test, config):
         testset = torchvision.datasets.CIFAR100(
             root=config.data_path, train=False, download=True, transform=transform_test
         )
-    trainset.targets = poisonLabels(trainset.targets, 0.0)
+    trainset.targets = poisonLabels(trainset.targets, 0.2)
     train_loader = torch.utils.data.DataLoader(
         trainset, batch_size=config.batch_size, shuffle=True, num_workers=config.workers
     )

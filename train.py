@@ -216,7 +216,7 @@ def test(test_loader, net, criterion, optimizer, epoch, device):
 
 def main():
     global args, config, last_epoch, best_prec, writer
-    epsilons = [0.01, 0.1, 0.25, 0.5, 0.75, 1,10]#For FGSM Attack
+    epsilons = [0.01, 0.1, 0.25, 0.5, 0.75, 1]#For FGSM Attack
     writer = SummaryWriter(log_dir=args.work_path + "/event")
 
     # read config from yaml file

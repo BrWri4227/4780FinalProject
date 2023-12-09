@@ -13,7 +13,7 @@ Instructions:
 - Run pip install -r requirements.txt to download the required dependencies
 - Use Terminal to navigate to CIFAR-Zoo Directory
 - Run program by typing python -u train.py --work-path ./experiments/cifar10/lenet
-- Replace 'lenet' with the architecture you wish to run.
+- Replace 'lenet' with the architecture you wish to run. (lenet, preresent20, alexnet)
 - Modify the parameters by navigating to experiments/cifar10/lenet but lenet is the network you wish to modify
 - To poison labels, navigate to utils.py in the CIFAR-ZOO root directory, find trainset.targets = poisonLabels(trainset.targets, 0.0) on line 136, modify 0.0 to the preferred % poison from 0-1, 0 being 0%, 1 being 100%
 - To change epsilon values, navigate to train.py in the CIFAR-ZOO Root directory, find epsilons on line 219 and modify to your desired values.
